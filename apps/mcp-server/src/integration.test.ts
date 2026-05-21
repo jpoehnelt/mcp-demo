@@ -384,18 +384,136 @@ describe("MCP server integration", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Auth middleware — success path
+  // MCP tools — slice 11
   // -------------------------------------------------------------------------
 
-  it("/mcp with valid token → 200 stub", async () => {
-    const token = await mintTokenViaIdP(idp, cimd, mcpAudience);
-    const res = await mcp.request("/mcp", {
+  /**
+   * Hand-crafts a JSON-RPC `tools/call` envelope and POSTs it to /mcp with
+   * the spec-mandated Streamable HTTP headers
+   * (Accept: application/json + text/event-stream, Content-Type:
+   * application/json).
+   */
+  function callTool(
+    appUnderTest: MCPServerApp,
+    token: string,
+    name: string,
+    args: Record<string, unknown>,
+    id = 1,
+  ): Promise<Response> {
+    return appUnderTest.request("/mcp", {
       method: "POST",
-      headers: { authorization: `Bearer ${token}` },
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: { name, arguments: args },
+      }),
     });
+  }
+
+  interface JsonRpcSuccess {
+    jsonrpc: "2.0";
+    id: number;
+    result: {
+      content: { type: string; text: string }[];
+      isError?: boolean;
+    };
+  }
+
+  it("list_cities works with any valid token (weather:read scope)", async () => {
+    // The mock IdP requires a non-empty scope from `scopes_supported`. Use
+    // weather:read — `list_cities` itself doesn't check scope, so any
+    // valid-aud token suffices.
+    const token = await mintTokenViaIdP(idp, cimd, mcpAudience, "weather:read");
+    const res = await callTool(mcp, token, "list_cities", {});
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean };
-    expect(body.ok).toBe(true);
+    const body = (await res.json()) as JsonRpcSuccess;
+    expect(body.result.isError).not.toBe(true);
+    const text = body.result.content[0]?.text ?? "";
+    const cities = JSON.parse(text) as string[];
+    expect(cities).toEqual(["Denver", "Seattle", "Austin"]);
+  });
+
+  it("get_weather works with weather:read", async () => {
+    const token = await mintTokenViaIdP(idp, cimd, mcpAudience, "weather:read");
+    const res = await callTool(mcp, token, "get_weather", { city: "Denver" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as JsonRpcSuccess;
+    expect(body.result.isError).not.toBe(true);
+    const payload = JSON.parse(body.result.content[0]?.text ?? "") as {
+      city: string;
+      tempF: number;
+      conditions: string;
+    };
+    expect(payload.city).toBe("Denver");
+    expect(typeof payload.tempF).toBe("number");
+    expect(typeof payload.conditions).toBe("string");
+  });
+
+  it("get_weather without weather:read → 403 + insufficient_scope WWW-Authenticate", async () => {
+    // Mint a token whose scope is `weather:premium` but NOT `weather:read`.
+    // The premium-only token should be rejected by get_weather.
+    const token = await mintTokenViaIdP(idp, cimd, mcpAudience, "weather:premium");
+    const res = await callTool(mcp, token, "get_weather", { city: "Denver" });
+    expect(res.status).toBe(403);
+    const h = res.headers.get("WWW-Authenticate");
+    expect(h).not.toBeNull();
+    expect(h).toContain("Bearer");
+    expect(h).toContain('error="insufficient_scope"');
+    expect(h).toContain('scope="weather:read"');
+    expect(h).toContain(`resource_metadata="${mcpAudience}/.well-known/oauth-protected-resource"`);
+  });
+
+  it("[INV-4.8] get_premium_forecast without weather:premium → 403 + WWW-Authenticate", async () => {
+    const token = await mintTokenViaIdP(idp, cimd, mcpAudience, "weather:read");
+    const res = await callTool(mcp, token, "get_premium_forecast", { city: "Denver" });
+    expect(res.status).toBe(403);
+    const h = res.headers.get("WWW-Authenticate");
+    expect(h).not.toBeNull();
+    expect(h).toContain("Bearer");
+    expect(h).toContain('error="insufficient_scope"');
+    expect(h).toContain('scope="weather:premium"');
+    expect(h).toContain(`resource_metadata="${mcpAudience}/.well-known/oauth-protected-resource"`);
+  });
+
+  it("get_premium_forecast works with weather:premium", async () => {
+    const token = await mintTokenViaIdP(idp, cimd, mcpAudience, "weather:read weather:premium");
+    const res = await callTool(mcp, token, "get_premium_forecast", { city: "Denver" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as JsonRpcSuccess;
+    expect(body.result.isError).not.toBe(true);
+    const payload = JSON.parse(body.result.content[0]?.text ?? "") as {
+      city: string;
+      forecast: { day: number; tempF: number; conditions: string }[];
+    };
+    expect(payload.city).toBe("Denver");
+    expect(payload.forecast).toHaveLength(14);
+  });
+
+  it("get_weather with invalid input → MCP-level validation error (not 5xx)", async () => {
+    const token = await mintTokenViaIdP(idp, cimd, mcpAudience, "weather:read");
+    const res = await callTool(mcp, token, "get_weather", { city: 123 });
+    // The SDK wraps schema-validation failures inside a JSON-RPC error
+    // response (or a tool-error CallToolResult) — either way the HTTP
+    // envelope must be 200 (not 5xx). We only assert that the response
+    // shape is a JSON-RPC payload referencing the validation failure.
+    expect(res.status).toBeLessThan(500);
+    const body = (await res.json()) as {
+      jsonrpc: "2.0";
+      id: number;
+      error?: { code: number; message: string };
+      result?: { isError?: boolean; content?: { type: string; text: string }[] };
+    };
+    const isError =
+      body.error !== undefined ||
+      body.result?.isError === true ||
+      (body.result?.content ?? []).some((c) => /invalid|validation/i.test(c.text));
+    expect(isError).toBe(true);
   });
 });
 

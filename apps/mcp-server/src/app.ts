@@ -12,8 +12,10 @@ import { createJWTVerifier, discoverASMetadata } from "@poc/shared";
 import { Hono } from "hono";
 import type { MCPServerEnv } from "./env.js";
 import type { Logger } from "./log.js";
+import { createMCPTransport } from "./mcp/server.js";
 import type { AuthVariables } from "./middleware/auth.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
+import { attachInsufficientScopeHandler } from "./middleware/require-scope.js";
 import { healthzRoute } from "./routes/healthz.js";
 import { prmRoute } from "./routes/prm.js";
 
@@ -58,12 +60,22 @@ export async function createMCPServerApp(deps: MCPServerDeps): Promise<MCPServer
   app.route("/", healthzRoute());
   app.route("/", prmRoute(deps.env));
 
-  // Authenticated MCP transport. Slice 11 will replace the stub handler
-  // with the real `@modelcontextprotocol/sdk` streamable-HTTP transport.
+  // Authenticated MCP transport. The auth middleware (§4.1) populates
+  // `c.var.claims` for downstream handlers; `createMCPTransport` mounts
+  // `POST /mcp` against the MCP SDK's Streamable HTTP transport and runs
+  // per-tool scope checks per resource-server.md §6.
   const auth = createAuthMiddleware({ env: deps.env, verifier, log: deps.log });
   app.use("/mcp", auth);
   app.use("/mcp/*", auth);
-  app.post("/mcp", (c) => c.json({ ok: true }));
+
+  // Global `onError` hook: maps `InsufficientScopeError` thrown anywhere
+  // downstream into the spec-mandated 403 + `WWW-Authenticate`
+  // (architecture invariant §4.8). Registered before the transport mount
+  // so a scope failure in the pre-flight check inside `createMCPTransport`
+  // is captured.
+  attachInsufficientScopeHandler(app, { env: deps.env });
+
+  createMCPTransport(app, { env: deps.env, log: deps.log });
 
   return app;
 }
