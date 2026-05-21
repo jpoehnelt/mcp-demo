@@ -1,0 +1,30 @@
+{
+  "name": "@poc/mcp-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP Resource Server. See specs/resource-server.md.",
+  "main": "./dist/index.js",
+  "bin": {
+    "mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "dev": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local watch src/index.ts",
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.local dist/index.js",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "@modelcontextprotocol/sdk": "catalog:",
+    "@poc/shared": "workspace:*",
+    "hono": "catalog:",
+    "jose": "catalog:",
+    "pino": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "tsx": "catalog:"
+  }
+}

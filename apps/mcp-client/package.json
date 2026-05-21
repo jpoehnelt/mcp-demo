@@ -1,0 +1,31 @@
+{
+  "name": "@poc/mcp-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP Client CLI. See specs/client.md.",
+  "main": "./dist/index.js",
+  "bin": {
+    "mcp-client": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "@modelcontextprotocol/sdk": "catalog:",
+    "@poc/shared": "workspace:*",
+    "commander": "^14.0.0",
+    "hono": "catalog:",
+    "open": "^11.0.0",
+    "pino": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "tsx": "catalog:"
+  }
+}

@@ -1,0 +1,30 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Centralized dependency versions. Bump once here; every package.json that
+# declares `"<dep>": "catalog:"` picks up the new range. Single-use deps
+# (better-sqlite3, commander, open, @types/*) stay inline in their package.json.
+catalog:
+  "@hono/node-server": ^2.0.0
+  "@modelcontextprotocol/sdk": ^1.29.0
+  hono: ^4.0.0
+  jose: ^6.0.0
+  pino: ^10.0.0
+  tsx: ^4.19.0
+  zod: ^4.0.0
+
+# Supply-chain defense: refuse to install package versions younger than 72h.
+# Recent npm worms (Shai-Hulud and friends) are typically pulled within 24-48h
+# of publication; a 72h gate avoids the blast radius without slowing routine
+# dep bumps. See pnpm docs: https://pnpm.io/settings#minimumreleaseage
+minimumReleaseAge: 4320
+minimumReleaseAgeExclude:
+  - "@poc/*"
+
+# When adding a new dependency that pulls in fresh transitives (vite/vitest/rolldown
+# ship daily), the gate will block the install. Bypass once with:
+#
+#     pnpm install --config.minimum-release-age=0
+#
+# The lockfile is still updated atomically; the gate just doesn't re-check on next install.

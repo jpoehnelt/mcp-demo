@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Runtime
+.env
+.env.local
+.env.*.local
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Editors
+.vscode/
+.idea/
+.DS_Store
+
+# Test artifacts
+coverage/
+.vitest-cache/

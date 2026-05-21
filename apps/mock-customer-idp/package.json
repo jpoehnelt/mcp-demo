@@ -1,0 +1,31 @@
+{
+  "name": "@poc/mock-customer-idp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mock Authorization Server (OAuth 2.1 + CIMD draft-01). See specs/authorization-server.md.",
+  "main": "./dist/index.js",
+  "bin": {
+    "mock-customer-idp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "dev": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local watch src/index.ts",
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.local dist/index.js",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "@poc/shared": "workspace:*",
+    "@hono/node-server": "catalog:",
+    "better-sqlite3": "^12.0.0",
+    "hono": "catalog:",
+    "jose": "catalog:",
+    "pino": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "tsx": "catalog:"
+  }
+}

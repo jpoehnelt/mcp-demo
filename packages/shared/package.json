@@ -1,0 +1,28 @@
+{
+  "name": "@poc/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared OAuth/JWT/PKCE/CIMD/SSRF logic for the MCP demo. See specs/shared-library.md.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "jose": "catalog:",
+    "zod": "catalog:"
+  }
+}

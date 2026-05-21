@@ -1,0 +1,22 @@
+# Lefthook config — runs on git hooks. Install with: pnpm exec lefthook install
+# Docs: https://lefthook.dev/configuration/
+
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{ts,tsx,js,json}"
+      # Auto-fix safe issues and re-stage. Unsafe fixes (renames, dead-code removal)
+      # are opt-in via `pnpm lint:fix:unsafe`.
+      run: pnpm exec biome check --staged --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+    typecheck:
+      # Runs only when TypeScript sources change. Whole-project check (composite
+      # references make this fast incrementally).
+      glob: "*.ts"
+      run: pnpm typecheck
+    test:
+      # Runs only when TypeScript sources change. Split into a pre-push step
+      # if/when the suite gets slow (>2s).
+      glob: "*.ts"
+      run: pnpm test

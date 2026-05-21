@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./apps/mock-customer-idp" },
+    { "path": "./apps/mcp-server" },
+    { "path": "./apps/mcp-client" }
+  ]
+}

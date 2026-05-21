@@ -1,0 +1,42 @@
+{
+  "name": "mcp-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "MCP OAuth 2.1 + CIMD authorization demo (workspace root)",
+  "type": "module",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
+  "scripts": {
+    "prepare": "lefthook install",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "dev": "pnpm --parallel --filter @poc/mock-customer-idp --filter @poc/mcp-server run dev",
+    "dev:idp": "pnpm --filter @poc/mock-customer-idp run dev",
+    "dev:mcp": "pnpm --filter @poc/mcp-server run dev",
+    "dev:client": "pnpm --filter @poc/mcp-client run dev",
+    "start:client": "pnpm --filter @poc/mcp-client run start",
+    "clean": "pnpm -r exec rm -rf dist .tsbuildinfo && rm -rf node_modules/.cache"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/node": "^25.9.0",
+    "lefthook": "^2.1.0",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "lefthook"
+    ]
+  }
+}
