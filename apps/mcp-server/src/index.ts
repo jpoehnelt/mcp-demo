@@ -6,6 +6,7 @@
 // Spec: specs/resource-server.md (whole document); §2 (env), §3 (PRM),
 // §4 (token validation), §4.12 (no-secret-logging) cover the boot path.
 
+import { pathToFileURL } from "node:url";
 import { serve } from "@hono/node-server";
 import { createMCPServerApp } from "./app.js";
 import type { MCPServerEnv } from "./env.js";
@@ -74,8 +75,9 @@ export type { Logger } from "./log.js";
 export { createLogger } from "./log.js";
 
 // Only run the boot sequence when invoked as a script — re-importing the
-// module (e.g. from tests) MUST NOT spawn an HTTP listener.
-const isMain = import.meta.url === `file://${process.argv[1] ?? ""}`;
+// module (e.g. from tests) MUST NOT spawn an HTTP listener. pathToFileURL
+// handles Windows backslashes + special-char encoding correctly.
+const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
 if (isMain) {
   boot().catch((err: unknown) => {
     // Boot failures past env validation: log + exit. No partial startup.

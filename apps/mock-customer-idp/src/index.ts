@@ -6,6 +6,7 @@
 // Spec: specs/authorization-server.md (whole document); §2 (env), §6
 // (keys), §7 (storage), §8 (logging) cover the boot path in particular.
 
+import { pathToFileURL } from "node:url";
 import { serve } from "@hono/node-server";
 import { createIdPApp } from "./app.js";
 import { applySchema, openDatabase } from "./db.js";
@@ -81,8 +82,9 @@ export type { Logger } from "./log.js";
 export { createLogger } from "./log.js";
 
 // Only run the boot sequence when invoked as a script — re-importing the
-// module (e.g. from tests) MUST NOT spawn an HTTP listener.
-const isMain = import.meta.url === `file://${process.argv[1] ?? ""}`;
+// module (e.g. from tests) MUST NOT spawn an HTTP listener. pathToFileURL
+// handles Windows backslashes + special-char encoding correctly.
+const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
 if (isMain) {
   boot().catch((err: unknown) => {
     // Boot failures past env validation: log + exit. No partial startup.
