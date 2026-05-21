@@ -6,9 +6,9 @@ packages:
 # declares `"<dep>": "catalog:"` picks up the new range. Single-use deps
 # (better-sqlite3, commander, open, @types/*) stay inline in their package.json.
 catalog:
-  "@hono/node-server": ^2.0.0
+  "@hono/node-server": ^2.0.3
   "@modelcontextprotocol/sdk": ^1.29.0
-  hono: ^4.0.0
+  hono: ^4.12.21
   jose: ^6.0.0
   pino: ^10.0.0
   tsx: ^4.19.0
