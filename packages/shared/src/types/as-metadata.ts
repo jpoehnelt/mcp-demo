@@ -11,10 +11,10 @@
 import { z } from "zod";
 
 export const ASMetadataSchema = z.object({
-  issuer: z.string().min(1),
-  authorization_endpoint: z.string().min(1),
-  token_endpoint: z.string().min(1),
-  jwks_uri: z.string().min(1),
+  issuer: z.string().url(),
+  authorization_endpoint: z.string().url(),
+  token_endpoint: z.string().url(),
+  jwks_uri: z.string().url(),
   response_types_supported: z
     .array(z.string())
     .min(1, "response_types_supported must be non-empty"),
@@ -25,7 +25,7 @@ export const ASMetadataSchema = z.object({
   scopes_supported: z.array(z.string()).optional(),
   token_endpoint_auth_methods_supported: z.array(z.string()).optional(),
   client_id_metadata_document_supported: z.boolean().optional(),
-  registration_endpoint: z.string().optional(),
+  registration_endpoint: z.string().url().optional(),
 });
 
 export type ASMetadata = z.infer<typeof ASMetadataSchema>;

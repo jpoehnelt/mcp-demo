@@ -142,6 +142,10 @@ export function parseWWWAuthenticate(header: string): {
       while (i < len) {
         const ch = rest[i];
         if (ch === "\\") {
+          // Trailing backslash inside a quoted-string is malformed per RFC 7235
+          // §2.1 (escape requires a following byte). Bail to the unterminated-
+          // string error below instead of stepping past `len`.
+          if (i + 1 >= len) break;
           i += 2;
           continue;
         }

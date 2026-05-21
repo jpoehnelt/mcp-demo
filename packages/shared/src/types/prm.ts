@@ -10,13 +10,13 @@
 import { z } from "zod";
 
 export const PRMSchema = z.object({
-  resource: z.string().min(1),
+  resource: z.string().url(),
   authorization_servers: z
-    .array(z.string().min(1))
+    .array(z.string().url())
     .min(1, "authorization_servers must be non-empty"),
   scopes_supported: z.array(z.string()).optional(),
   bearer_methods_supported: z.array(z.string()).default(["header"]),
-  resource_documentation: z.string().optional(),
+  resource_documentation: z.string().url().optional(),
 });
 
 export type ProtectedResourceMetadata = z.infer<typeof PRMSchema>;

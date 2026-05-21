@@ -101,6 +101,13 @@ describe("parseWWWAuthenticate", () => {
     expect(() => parseWWWAuthenticate('Bearer realm="oops')).toThrow();
   });
 
+  it("throws on trailing backslash inside quoted-string", () => {
+    // Per RFC 7235 §2.1 a backslash must be followed by a byte; a string ending
+    // with a lone backslash is malformed. Regression test for a parser bug that
+    // stepped past the input on the escape and then mis-reported the failure.
+    expect(() => parseWWWAuthenticate('Bearer realm="oops\\')).toThrow();
+  });
+
   it("throws on missing `=`", () => {
     expect(() => parseWWWAuthenticate('Bearer realm "r"')).toThrow();
   });
