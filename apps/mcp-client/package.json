@@ -12,7 +12,7 @@
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx src/index.ts",
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "dependencies": {

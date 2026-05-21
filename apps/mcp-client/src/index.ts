@@ -8,9 +8,11 @@
 //
 // Spec: specs/client.md §1 (CLI surface), §5 (output format).
 //
-// `connect` is the only sub-command; we also accept bare argv (no
-// sub-command) so `mcp-client --tool foo` works the same as
-// `mcp-client connect --tool foo`.
+// The CLI has a single operation (drive the full OAuth + tool-call flow),
+// so we expose it as flat program-level options rather than a subcommand.
+// pnpm's `--` separator (`pnpm dev:client -- --tool foo`) only works
+// cleanly without a subcommand because commander would otherwise treat
+// trailing args as positional inputs to the subcommand.
 
 import { pathToFileURL } from "node:url";
 import { Command } from "commander";
@@ -73,15 +75,12 @@ async function main(argv: string[]): Promise<void> {
     .option("--headless", "Auto-approve consent via direct HTTP (CI demo)")
     .option("--verbose", "Print the full handshake timeline");
 
-  // Subcommand alias — `connect` is the spec's documented form, but
-  // omitting it should also work. commander handles unknown sub-commands by
-  // erroring, so we explicitly register `connect` as a no-op forwarder.
-  program
-    .command("connect", { isDefault: true })
-    .description("Connect to the MCP server, authorize, and call the tool (default)")
-    .action(() => undefined);
-
-  program.parse(argv);
+  // Strip standalone `--` from argv. pnpm forwards `pnpm dev:client -- --tool
+  // foo` as `... -- --tool foo`, preserving the separator; commander then
+  // treats everything after `--` as positional args and errors with "too many
+  // arguments". The `--` is a pnpm artifact, not user intent — remove it.
+  const cleanedArgv = argv.filter((arg, i) => !(arg === "--" && i >= 2));
+  program.parse(cleanedArgv);
   const rawOpts = program.opts<RawOptions>();
 
   let options: ReturnType<typeof parseOptions>;
