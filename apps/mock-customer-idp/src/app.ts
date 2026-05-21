@@ -14,6 +14,7 @@ import type { Logger } from "./log.js";
 import { registerAuthorizeRoutes } from "./routes/authorize.js";
 import { healthzRoute } from "./routes/healthz.js";
 import { registerMetadataRoutes } from "./routes/metadata.js";
+import { registerTokenRoutes } from "./routes/token.js";
 
 export interface IdPDeps {
   env: IdPEnv;
@@ -52,6 +53,12 @@ export function createIdPApp(deps: IdPDeps): IdPApp {
   app.route("/", healthzRoute());
   registerMetadataRoutes(app, { env: deps.env, keys: deps.keys });
   registerAuthorizeRoutes(app);
+  registerTokenRoutes(app, {
+    env: deps.env,
+    db: deps.db,
+    log: deps.log,
+    keys: deps.keys,
+  });
 
   return app;
 }

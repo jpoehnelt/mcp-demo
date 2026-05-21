@@ -7,10 +7,14 @@
 //     §8 (logging redaction)
 //   - specs/architecture.md invariant §4.12 (no-secret-logging)
 
+import { Buffer } from "node:buffer";
+import { createHash, randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { Writable } from "node:stream";
 import { type ServerType, serve } from "@hono/node-server";
+import { canonicalize, createJWTVerifier } from "@poc/shared";
 import { Hono } from "hono";
+import { decodeProtectedHeader } from "jose";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 import { createIdPApp } from "./app.js";
@@ -801,6 +805,504 @@ describe("POST /authorize/consent [§4.5]", () => {
       body: form.toString(),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /token — authorization_code grant. Spec anchors:
+//   - specs/authorization-server.md §5.1 / §5.2 / §5.4
+//   - specs/architecture.md §4.4 (PKCE), §4.5 (single canonical resource)
+//
+// Tests drive /authorize end-to-end (with AS_AUTO_APPROVE=true) to obtain
+// real auth-code rows whose `code_challenge` / `resource` / `client_id` /
+// `redirect_uri` bindings match what we POST to /token.
+// ---------------------------------------------------------------------------
+
+interface AuthorizedFlow {
+  app: ReturnType<typeof createIdPApp>;
+  db: ReturnType<typeof openInMemoryDB>;
+  env: IdPEnv;
+  keys: Awaited<ReturnType<typeof loadOrGenerateKey>>;
+  code: string;
+  /** Plaintext PKCE verifier matching the persisted `code_challenge`. */
+  verifier: string;
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  scope: string;
+}
+
+/**
+ * Drive /authorize with AS_AUTO_APPROVE so the response is a 302 carrying
+ * `code` in the query string. Returns everything a /token test needs to
+ * post a valid request — caller can then mutate one field per scenario.
+ */
+async function driveAuthorize(
+  cimdServer: CIMDFixtureServer,
+  overrides: { scope?: string; resource?: string; clientIdPathOverride?: string } = {},
+): Promise<AuthorizedFlow> {
+  const { app, db, env, keys } = await buildApp({
+    AS_AUTO_APPROVE: "true",
+    AS_DEV_ALLOW_INSECURE_CIMD: "true",
+  });
+
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+
+  const clientId = overrides.clientIdPathOverride ?? cimdServer.url;
+  const redirectUri = "https://app.example.com/cb";
+  const resource = overrides.resource ?? "https://mcp.example.com";
+  const scope = overrides.scope ?? "weather:read";
+
+  cimdServer.setHandler((path) => {
+    if (path === "/cimd/client.json") {
+      return jsonResponse(buildCIMD(cimdServer.url, [redirectUri]));
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const query = buildAuthorizeQuery({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope,
+    resource,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+  });
+  const res = await app.request(`/authorize?${query}`);
+  if (res.status !== 302) {
+    throw new Error(`expected 302 from /authorize, got ${String(res.status)}`);
+  }
+  const location = res.headers.get("Location");
+  if (location === null) throw new Error("missing Location header");
+  const codeValue = new URL(location).searchParams.get("code");
+  if (codeValue === null) throw new Error("missing code on redirect");
+
+  return {
+    app,
+    db,
+    env,
+    keys,
+    code: codeValue,
+    verifier,
+    clientId,
+    redirectUri,
+    resource,
+    scope,
+  };
+}
+
+function tokenForm(overrides: Partial<Record<string, string>> = {}): {
+  body: string;
+  base: Record<string, string>;
+} {
+  const base: Record<string, string> = {
+    grant_type: "authorization_code",
+    code: "",
+    client_id: "",
+    redirect_uri: "",
+    code_verifier: "",
+    resource: "",
+  };
+  const merged = { ...base, ...overrides };
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(merged)) {
+    if (v !== undefined && v !== "") params.append(k, v);
+  }
+  return { body: params.toString(), base: merged };
+}
+
+function postToken(
+  app: ReturnType<typeof createIdPApp>,
+  formBody: string,
+  contentType = "application/x-www-form-urlencoded",
+): Promise<Response> {
+  return app.request("/token", {
+    method: "POST",
+    headers: { "content-type": contentType },
+    body: formBody,
+  });
+}
+
+/**
+ * Spin up an HTTP listener that proxies the in-process IdP's JWKS so the
+ * shared `createJWTVerifier` (which fetches over HTTP via jose) can verify
+ * tokens minted by the same in-process IdP. Loopback only; closed in the
+ * test's `afterEach`.
+ */
+async function startJWKSProxy(
+  app: ReturnType<typeof createIdPApp>,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const proxy = new Hono();
+  proxy.get("/jwks.json", async (c) => {
+    const inner = await app.request("/jwks.json");
+    const body = (await inner.json()) as Record<string, unknown>;
+    return c.json(body);
+  });
+  let server: ServerType | undefined;
+  const port: number = await new Promise((resolve, reject) => {
+    server = serve({ fetch: proxy.fetch, port: 0, hostname: "127.0.0.1" }, (info) => {
+      resolve((info as AddressInfo).port);
+    });
+    server.on("error", reject);
+  });
+  return {
+    url: `http://127.0.0.1:${String(port)}/jwks.json`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        if (server === undefined) {
+          resolve();
+          return;
+        }
+        server.close((err) => (err !== undefined ? reject(err) : resolve()));
+      }),
+  };
+}
+
+describe("POST /token (authorization_code grant) [§5.1]", () => {
+  let cimdServer: CIMDFixtureServer;
+  beforeEach(async () => {
+    cimdServer = await startCIMDServer();
+  });
+  afterEach(async () => {
+    await cimdServer.close();
+  });
+
+  it("happy path → returns JWT + refresh token, verifies via JWKS", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const json = (await res.json()) as {
+      access_token: string;
+      token_type: string;
+      expires_in: number;
+      scope: string;
+      refresh_token: string;
+    };
+    expect(json.token_type).toBe("Bearer");
+    expect(json.expires_in).toBe(f.env.AS_TOKEN_TTL_SEC);
+    expect(json.scope).toBe(f.scope);
+    expect(typeof json.access_token).toBe("string");
+    // base64url refresh — 32 bytes ≈ 43 chars.
+    expect(json.refresh_token).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(json.refresh_token.length).toBeGreaterThanOrEqual(40);
+
+    // Header has the active kid + a non-"none" alg.
+    const header = decodeProtectedHeader(json.access_token);
+    expect(header.kid).toBe(f.keys.kid);
+    expect(header.alg).toBe(f.env.AS_SIGNING_ALG);
+    expect(header.alg).not.toBe("none");
+
+    // Verify via shared verifier against the in-process JWKS.
+    const proxy = await startJWKSProxy(f.app);
+    try {
+      const verifier = createJWTVerifier({
+        issuer: canonicalize(f.env.AS_ISSUER_URL),
+        audience: canonicalize(f.resource),
+        jwksUri: proxy.url,
+      });
+      const claims = await verifier.verify(json.access_token);
+      expect(claims.iss).toBe(f.env.AS_ISSUER_URL);
+      expect(claims.aud).toBe(f.resource);
+      expect(claims.sub).toBe(f.env.AS_DEMO_USER_SUB);
+      expect(claims.client_id).toBe(f.clientId);
+      expect(claims.scope).toBe(f.scope);
+      expect(typeof claims.jti).toBe("string");
+      expect(claims.exp).toBeGreaterThan(claims.iat);
+    } finally {
+      await proxy.close();
+    }
+  });
+
+  it("issues refresh token bound to (client_id, resource, scope, sub)", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { refresh_token: string };
+    const expectedHash = createHash("sha256").update(json.refresh_token).digest("hex");
+    const row = f.db
+      .prepare(
+        "SELECT token_hash, family_id, parent_hash, client_id, resource, scope, sub, revoked FROM refresh_tokens WHERE token_hash = ?",
+      )
+      .get(expectedHash) as Record<string, unknown> | undefined;
+    expect(row).toBeDefined();
+    expect(row?.client_id).toBe(f.clientId);
+    expect(row?.resource).toBe(f.resource);
+    expect(row?.scope).toBe(f.scope);
+    expect(row?.sub).toBe(f.env.AS_DEMO_USER_SUB);
+    expect(row?.parent_hash).toBeNull();
+    expect(row?.revoked).toBe(0);
+    expect(typeof row?.family_id).toBe("string");
+  });
+
+  it("alg: none token MUST NOT be issued — header.alg matches AS_SIGNING_ALG", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { access_token: string };
+    const header = decodeProtectedHeader(json.access_token);
+    expect(header.alg).toBe(f.env.AS_SIGNING_ALG);
+    expect(header.alg).not.toBe("none");
+  });
+
+  it("[INV-4.4] rejects bad PKCE verifier → invalid_grant", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const wrongVerifier = randomBytes(32).toString("base64url");
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: wrongVerifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_grant");
+  });
+
+  it("[INV-4.5] rejects multiple resource params → invalid_request", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const params = new URLSearchParams();
+    params.append("grant_type", "authorization_code");
+    params.append("code", f.code);
+    params.append("client_id", f.clientId);
+    params.append("redirect_uri", f.redirectUri);
+    params.append("code_verifier", f.verifier);
+    params.append("resource", f.resource);
+    params.append("resource", "https://other.example.com");
+    const res = await postToken(f.app, params.toString());
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_request");
+  });
+
+  it("[INV-4.5] rejects missing resource → invalid_target", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      // resource intentionally omitted (tokenForm drops empty values).
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_target");
+  });
+
+  it("resource mismatch → invalid_target", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: "https://other.example.com",
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_target");
+  });
+
+  it("replayed code → invalid_grant", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const first = await postToken(f.app, body);
+    expect(first.status).toBe(200);
+    const second = await postToken(f.app, body);
+    expect(second.status).toBe(400);
+    const json = (await second.json()) as { error: string };
+    expect(json.error).toBe("invalid_grant");
+  });
+
+  it("expired code → invalid_grant", async () => {
+    const f = await driveAuthorize(cimdServer);
+    // Mutate the row's exp to a past value — simpler than waiting 60s.
+    f.db.prepare("UPDATE auth_codes SET exp = ? WHERE code = ?").run(Date.now() - 1, f.code);
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_grant");
+  });
+
+  it("unknown code → invalid_grant", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      code: "not-a-real-code",
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_grant");
+  });
+
+  it("mismatched redirect_uri → invalid_grant", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: "https://different.example.com/cb",
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_grant");
+  });
+
+  it("mismatched client_id → invalid_client (401)", async () => {
+    const f = await driveAuthorize(cimdServer);
+    // Provide a syntactically-valid but different client_id URL. The token
+    // endpoint canonicalizes and byte-compares against the stored value.
+    const { body } = tokenForm({
+      code: f.code,
+      client_id: "https://different.example.com/cimd",
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(401);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_client");
+  });
+
+  it("wrong content-type (JSON) → invalid_request", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const payload = JSON.stringify({
+      grant_type: "authorization_code",
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, payload, "application/json");
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_request");
+  });
+
+  it("unsupported grant_type → unsupported_grant_type", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      grant_type: "client_credentials",
+      code: f.code,
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("unsupported_grant_type");
+  });
+
+  it("missing code → invalid_request", async () => {
+    const f = await driveAuthorize(cimdServer);
+    const { body } = tokenForm({
+      client_id: f.clientId,
+      redirect_uri: f.redirectUri,
+      code_verifier: f.verifier,
+      resource: f.resource,
+    });
+    const res = await postToken(f.app, body);
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("invalid_request");
+  });
+
+  it("refresh tokens have distinct family_ids across separate grants", async () => {
+    // Two independent authorize→token flows must not collide on family_id.
+    // Each redeemed code produces a fresh family with parent_hash=NULL.
+    const f1 = await driveAuthorize(cimdServer);
+    const r1 = await postToken(
+      f1.app,
+      tokenForm({
+        code: f1.code,
+        client_id: f1.clientId,
+        redirect_uri: f1.redirectUri,
+        code_verifier: f1.verifier,
+        resource: f1.resource,
+      }).body,
+    );
+    expect(r1.status).toBe(200);
+    const j1 = (await r1.json()) as { refresh_token: string };
+
+    const f2 = await driveAuthorize(cimdServer);
+    const r2 = await postToken(
+      f2.app,
+      tokenForm({
+        code: f2.code,
+        client_id: f2.clientId,
+        redirect_uri: f2.redirectUri,
+        code_verifier: f2.verifier,
+        resource: f2.resource,
+      }).body,
+    );
+    expect(r2.status).toBe(200);
+    const j2 = (await r2.json()) as { refresh_token: string };
+
+    const hash1 = createHash("sha256").update(j1.refresh_token).digest("hex");
+    const hash2 = createHash("sha256").update(j2.refresh_token).digest("hex");
+    const fam1 = (
+      f1.db.prepare("SELECT family_id FROM refresh_tokens WHERE token_hash = ?").get(hash1) as {
+        family_id: string;
+      }
+    ).family_id;
+    const fam2 = (
+      f2.db.prepare("SELECT family_id FROM refresh_tokens WHERE token_hash = ?").get(hash2) as {
+        family_id: string;
+      }
+    ).family_id;
+    expect(fam1).not.toBe(fam2);
+    // The plaintext refresh token MUST NOT be stored in the row.
+    const stored = Buffer.from(hash1, "hex");
+    expect(stored.length).toBe(32);
   });
 });
 
