@@ -21,6 +21,8 @@ export {
   TokenExpiredError,
 } from "./errors.js";
 export { canonicalize, equalsCanonical } from "./oauth/canonical-uri.js";
+export { generatePKCE, verifyPKCE } from "./oauth/pkce.js";
+export { generateState, verifyState } from "./oauth/state.js";
 export type { ASMetadata } from "./types/as-metadata.js";
 export { ASMetadataSchema, parseASMetadata } from "./types/as-metadata.js";
 export type {
