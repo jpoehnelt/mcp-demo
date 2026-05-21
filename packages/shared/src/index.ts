@@ -27,6 +27,11 @@ export {
   parseWWWAuthenticate,
 } from "./http/www-authenticate.js";
 export { canonicalize, equalsCanonical } from "./oauth/canonical-uri.js";
+export type { ValidatedCIMDDocument } from "./oauth/cimd-validator.js";
+export { validateFetchedCIMD } from "./oauth/cimd-validator.js";
+export { discoverASMetadata, fetchPRM, resolvePRMUrl } from "./oauth/discovery.js";
+export type { JWTVerifier, JWTVerifierOptions } from "./oauth/jwt-verifier.js";
+export { createJWTVerifier } from "./oauth/jwt-verifier.js";
 export { generatePKCE, verifyPKCE } from "./oauth/pkce.js";
 export { generateState, verifyState } from "./oauth/state.js";
 export type { ASMetadata } from "./types/as-metadata.js";
