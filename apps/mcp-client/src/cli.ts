@@ -31,6 +31,14 @@ export interface ClientOptions {
   headless: boolean;
   /** Print the full handshake timeline (vs. just the tool result). */
   verbose: boolean;
+  /**
+   * Run discovery + authorize + token exchange, then print ONLY the bearer
+   * token to stdout and exit. Skips the tool call. Intended for pasting into
+   * MCP Inspector's bearer-token field when Inspector's DCR-only OAuth flow
+   * is incompatible with our CIMD-only IdP. Dev convenience — never use the
+   * resulting token outside the local demo.
+   */
+  printToken: boolean;
 }
 
 /**
@@ -46,6 +54,7 @@ export interface RawOptions {
   autoOpen?: boolean;
   headless?: boolean;
   verbose?: boolean;
+  printToken?: boolean;
 }
 
 const argsJsonSchema = z
@@ -104,6 +113,7 @@ export function parseOptions(raw: RawOptions): ClientOptions {
       autoOpen: z.boolean().default(autoOpenDefault),
       headless: z.boolean().default(false),
       verbose: z.boolean().default(false),
+      printToken: z.boolean().default(false),
     })
     .parse({
       server: raw.server,
@@ -114,6 +124,7 @@ export function parseOptions(raw: RawOptions): ClientOptions {
       autoOpen: raw.autoOpen,
       headless,
       verbose: raw.verbose,
+      printToken: raw.printToken,
     });
 
   return {
@@ -125,5 +136,6 @@ export function parseOptions(raw: RawOptions): ClientOptions {
     autoOpen: parsed.autoOpen,
     headless: parsed.headless,
     verbose: parsed.verbose,
+    printToken: parsed.printToken,
   };
 }

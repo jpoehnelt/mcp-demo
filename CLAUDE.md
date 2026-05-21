@@ -52,5 +52,6 @@ Pre-commit runs the same three on staged TypeScript changes, so a clean commit i
 | Run dev — IdP only           | `pnpm dev:idp`                        |
 | Run dev — MCP server only    | `pnpm dev:mcp`                        |
 | Run dev — MCP client         | `pnpm dev:client`                     |
+| Print a bearer token (for curl / ad-hoc use) | `pnpm print-token`    |
 
 Composite project references mean incremental builds are fast — prefer `pnpm typecheck` over per-file checks.

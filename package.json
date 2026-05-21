@@ -23,6 +23,7 @@
     "dev:mcp": "pnpm --filter @poc/mcp-server run dev",
     "dev:client": "pnpm --filter @poc/mcp-client run dev",
     "start:client": "pnpm --filter @poc/mcp-client run start",
+    "print-token": "pnpm --filter @poc/mcp-client run start -- --print-token",
     "clean": "pnpm -r exec rm -rf dist .tsbuildinfo && rm -rf node_modules/.cache"
   },
   "devDependencies": {

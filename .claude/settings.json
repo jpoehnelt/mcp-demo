@@ -39,6 +39,7 @@
       "Bash(pnpm lint)",
       "Bash(pnpm lint:*)",
       "Bash(pnpm outdated:*)",
+      "Bash(pnpm print-token)",
       "Bash(pnpm start:*)",
       "Bash(pnpm test)",
       "Bash(pnpm test:*)",

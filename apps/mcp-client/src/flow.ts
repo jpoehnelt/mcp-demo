@@ -47,6 +47,12 @@ export interface FlowResult {
   finalScope: string;
   /** Number of step-up retries performed (0 = first call succeeded). */
   stepUpsPerformed: number;
+  /**
+   * Populated only when `options.printToken` is set; the access token from
+   * the token endpoint, NOT redacted. The caller is responsible for handling
+   * it carefully (do not log, do not persist).
+   */
+  accessToken?: string;
 }
 
 /**
@@ -62,7 +68,7 @@ async function authorizeAndCall(args: {
   cimd: CIMDServerHandle;
   scope: string;
   deps: FlowDeps;
-}): Promise<{ outcome: MCPToolOutcome; grantedScope: string }> {
+}): Promise<{ outcome: MCPToolOutcome; grantedScope: string; accessToken?: string }> {
   const { options, discovery, cimd, scope, deps } = args;
 
   // (4) PKCE + state.
@@ -127,6 +133,19 @@ async function authorizeAndCall(args: {
       tokenRes.expires_in !== undefined ? `, exp: ${formatTtl(tokenRes.expires_in)}` : ""
     })`,
   );
+
+  // `--print-token` short-circuit: skip the tool call and surface the token
+  // back to runFlow so the CLI can print it. Caller is responsible for not
+  // logging it. This exists as a dev-only escape hatch for MCP Inspector,
+  // whose OAuth flow defaults to DCR (RFC 7591) — incompatible with our
+  // CIMD-only IdP (see architecture.md §6 non-goals).
+  if (options.printToken) {
+    return {
+      outcome: { ok: true, text: "", rawBody: null },
+      grantedScope,
+      accessToken: tokenRes.access_token,
+    };
+  }
 
   // (7) Call the tool.
   deps.reporter.step(`Tool call: ${options.tool}(${JSON.stringify(options.args)})`);
@@ -197,7 +216,7 @@ export async function runFlow(options: ClientOptions, deps: FlowDeps): Promise<F
 
   try {
     while (true) {
-      const { outcome, grantedScope } = await authorizeAndCall({
+      const { outcome, grantedScope, accessToken } = await authorizeAndCall({
         options,
         discovery,
         cimd,
@@ -210,6 +229,7 @@ export async function runFlow(options: ClientOptions, deps: FlowDeps): Promise<F
           resultText: outcome.text,
           finalScope: grantedScope,
           stepUpsPerformed: stepUps,
+          ...(accessToken === undefined ? {} : { accessToken }),
         };
       }
 

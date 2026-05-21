@@ -73,7 +73,11 @@ async function main(argv: string[]): Promise<void> {
     .option("--cimd-port <n>", "Port for local CIMD/callback server", String(DEFAULT_CIMD_PORT))
     .option("--auto-open", "Open the browser automatically (default: true unless --headless or CI)")
     .option("--headless", "Auto-approve consent via direct HTTP (CI demo)")
-    .option("--verbose", "Print the full handshake timeline");
+    .option("--verbose", "Print the full handshake timeline")
+    .option(
+      "--print-token",
+      "Run discovery + authorize + token exchange, then print the bearer token to stdout and exit (DEV only — for MCP Inspector paste-in)",
+    );
 
   // Strip standalone `--` from argv. pnpm forwards `pnpm dev:client -- --tool
   // foo` as `... -- --tool foo`, preserving the separator; commander then
@@ -102,6 +106,18 @@ async function main(argv: string[]): Promise<void> {
 
   try {
     const result = await runFlow(options, { log, reporter });
+    if (options.printToken) {
+      if (result.accessToken === undefined) {
+        process.stderr.write("\n--print-token set but flow returned no token\n");
+        process.exit(1);
+      }
+      // Print to stdout for easy capture in pipelines / Inspector paste-in.
+      // Step lines went to stdout above (via reporter); they're prefixed and
+      // recognizable, so a `tail -1` or `... | grep -v '^✓ '` filter works if
+      // a strict piped capture is needed.
+      process.stdout.write(`${result.accessToken}\n`);
+      process.exit(0);
+    }
     reporter.result(formatToolResult(result.resultText));
     if (options.verbose) {
       process.stdout.write(
