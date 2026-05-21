@@ -53,18 +53,21 @@ const METADATA_MAX_BYTES = 64 * 1024;
 const METADATA_TIMEOUT_MS = 5000;
 
 /**
- * Build SafeFetch options for metadata-document GETs. Discovery never
- * permits `http://` (allowInsecure=false): the IdP/RS in this demo MUST
- * publish discovery over `https://`.
+ * Build SafeFetch options for metadata-document GETs. Production callers
+ * MUST pass `allowInsecure: false` so discovery refuses `http://` (avoids
+ * SSRF + plaintext credential exposure). The localhost demo opts in via
+ * env-var-driven `allowInsecure: true` per [authorization-server.md §4.3]
+ * style — see the `MCP_DEV_ALLOW_INSECURE_DISCOVERY` env var on the MCP
+ * server and the CLI behavior on the client.
  */
-function metadataFetchOptions(): {
+function metadataFetchOptions(allowInsecure: boolean): {
   allowInsecure: boolean;
   maxBytes: number;
   timeoutMs: number;
   expectContentType: string;
 } {
   return {
-    allowInsecure: false,
+    allowInsecure,
     maxBytes: METADATA_MAX_BYTES,
     timeoutMs: METADATA_TIMEOUT_MS,
     expectContentType: JSON_MEDIA_TYPE,
@@ -105,8 +108,12 @@ export function resolvePRMUrl(mcpServerUrl: CanonicalURI): string {
  * Throws on transport / SSRF / content-type / schema errors per `safeFetch`
  * and zod.
  */
-export async function fetchPRM(url: string): Promise<ProtectedResourceMetadata> {
-  const { status, body } = await fetcherImpl(url, metadataFetchOptions());
+export async function fetchPRM(
+  url: string,
+  opts: { allowInsecure?: boolean } = {},
+): Promise<ProtectedResourceMetadata> {
+  const allowInsecure = opts.allowInsecure ?? false;
+  const { status, body } = await fetcherImpl(url, metadataFetchOptions(allowInsecure));
   if (status < 200 || status >= 300) {
     throw new InvalidTokenError(`PRM fetch returned HTTP ${String(status)} (${url})`);
   }
@@ -160,9 +167,9 @@ function buildAppendedURL(parsed: URL, wellKnown: string): string {
   return `${parsed.protocol}//${parsed.host}${base}/.well-known/${wellKnown}`;
 }
 
-async function tryFetchASMetadata(url: string): Promise<CascadeAttempt> {
+async function tryFetchASMetadata(url: string, allowInsecure: boolean): Promise<CascadeAttempt> {
   try {
-    const { status, body } = await fetcherImpl(url, metadataFetchOptions());
+    const { status, body } = await fetcherImpl(url, metadataFetchOptions(allowInsecure));
     if (status < 200 || status >= 300) {
       return { url, error: new Error(`HTTP ${String(status)} from ${url}`) };
     }
@@ -192,7 +199,11 @@ async function tryFetchASMetadata(url: string): Promise<CascadeAttempt> {
  * Hard-fail: the returned metadata MUST list `S256` in
  * `code_challenge_methods_supported`. Anything else throws.
  */
-export async function discoverASMetadata(issuerUrl: CanonicalURI): Promise<ASMetadata> {
+export async function discoverASMetadata(
+  issuerUrl: CanonicalURI,
+  opts: { allowInsecure?: boolean } = {},
+): Promise<ASMetadata> {
+  const allowInsecure = opts.allowInsecure ?? false;
   const parsed = new URL(issuerUrl);
 
   const cascade: string[] = [
@@ -203,7 +214,7 @@ export async function discoverASMetadata(issuerUrl: CanonicalURI): Promise<ASMet
 
   let lastAttempt: CascadeAttempt | undefined;
   for (const url of cascade) {
-    const attempt = await tryFetchASMetadata(url);
+    const attempt = await tryFetchASMetadata(url, allowInsecure);
     lastAttempt = attempt;
     if (attempt.metadata !== undefined) {
       assertS256Support(attempt.metadata, attempt.url);

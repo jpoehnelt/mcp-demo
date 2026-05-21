@@ -137,9 +137,11 @@ const IPV4_LOOPBACK_CIDR = "127.0.0.0/8";
  * Returns true if `ip` is a denylisted address per shared-library §3.2.
  *
  * `opts.allowLoopback`:
- *   * `false` — IPv4 `127.0.0.0/8` is denied along with every other family.
- *   * `true`  — IPv4 `127.0.0.0/8` is allowed; ALL other families (including
- *     IPv6 `::1`, link-local, ULA, multicast, etc.) remain denied.
+ *   * `false` — IPv4 `127.0.0.0/8` AND IPv6 `::1` are denied along with every
+ *     other family.
+ *   * `true`  — IPv4 `127.0.0.0/8` AND IPv6 `::1` are allowed; all other
+ *     families (link-local, ULA, multicast, etc.) remain denied. `localhost`
+ *     resolves to `::1` on modern systems, so both must be covered together.
  *
  * IPv4-mapped IPv6 (`::ffff:0:0/96`) recursively re-checks the embedded IPv4.
  *
@@ -191,7 +193,9 @@ export function isDeniedAddress(ip: string, opts: { allowLoopback: boolean }): b
     return false;
   }
 
-  // IPv6 loopback ::1
+  // IPv6 loopback ::1 — same toggle as IPv4 loopback so `allowLoopback`
+  // covers both families. `localhost` on modern macOS/Linux resolves to ::1
+  // by default; if v4 is permitted but ::1 isn't, the toggle's name lies.
   if (
     v6[0] === 0 &&
     v6[1] === 0 &&
@@ -210,7 +214,7 @@ export function isDeniedAddress(ip: string, opts: { allowLoopback: boolean }): b
     v6[14] === 0 &&
     v6[15] === 1
   ) {
-    return true;
+    return !opts.allowLoopback;
   }
 
   // IPv6 unspecified ::

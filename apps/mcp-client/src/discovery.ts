@@ -40,7 +40,11 @@ export async function runDiscovery(opts: {
   prmUrl: string;
   log: Logger;
 }): Promise<DiscoveryResult> {
-  const prm = await fetchPRM(opts.prmUrl);
+  // The client is a demo CLI — it routinely points at http://localhost. We
+  // unconditionally pass `allowInsecure: true` to discovery; production usage
+  // (where this matters) would require switching to https endpoints upstream
+  // anyway and is out of scope for this CLI.
+  const prm = await fetchPRM(opts.prmUrl, { allowInsecure: true });
   const resource = canonicalize(prm.resource);
 
   const firstAS = prm.authorization_servers[0];
@@ -51,7 +55,7 @@ export async function runDiscovery(opts: {
   }
   const authorizationServer = canonicalize(firstAS);
 
-  const asMetadata = await discoverASMetadata(authorizationServer);
+  const asMetadata = await discoverASMetadata(authorizationServer, { allowInsecure: true });
 
   if (asMetadata.client_id_metadata_document_supported !== true) {
     // Per spec §3.1 step 6: warn but proceed. The IdP may still accept CIMD

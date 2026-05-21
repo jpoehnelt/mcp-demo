@@ -101,6 +101,8 @@ describe.skipIf(SKIP_SMOKE)("subprocess smoke test", () => {
         MCP_AUDIENCE: `http://localhost:${String(MCP_PORT)}`,
         MCP_PRM_AUTH_SERVERS: `http://localhost:${String(IDP_PORT)}`,
         MCP_PORT: String(MCP_PORT),
+        // Required for the localhost demo so discoverASMetadata accepts http://.
+        MCP_DEV_ALLOW_INSECURE_DISCOVERY: "true",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -120,7 +122,7 @@ describe.skipIf(SKIP_SMOKE)("subprocess smoke test", () => {
     const client = spawn(
       "pnpm",
       [
-        "dev:client",
+        "start:client",
         "--headless",
         "--server",
         `http://localhost:${String(MCP_PORT)}`,
@@ -143,7 +145,7 @@ describe.skipIf(SKIP_SMOKE)("subprocess smoke test", () => {
     const client = spawn(
       "pnpm",
       [
-        "dev:client",
+        "start:client",
         "--headless",
         "--server",
         `http://localhost:${String(MCP_PORT)}`,

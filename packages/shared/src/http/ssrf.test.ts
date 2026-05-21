@@ -55,8 +55,8 @@ describe("isDeniedAddress (allowLoopback=true)", () => {
   it("still denies IPv4 10.0.0.1", () => {
     expect(isDeniedAddress("10.0.0.1", { allowLoopback: true })).toBe(true);
   });
-  it("still denies IPv6 ::1 (loopback exemption is IPv4-only)", () => {
-    expect(isDeniedAddress("::1", { allowLoopback: true })).toBe(true);
+  it("permits IPv6 ::1 (loopback exemption covers both families)", () => {
+    expect(isDeniedAddress("::1", { allowLoopback: true })).toBe(false);
   });
   it("still denies IPv4 169.254.169.254", () => {
     expect(isDeniedAddress("169.254.169.254", { allowLoopback: true })).toBe(true);

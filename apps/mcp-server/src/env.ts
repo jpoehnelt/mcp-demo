@@ -17,6 +17,13 @@ export interface MCPServerEnv {
   MCP_AUDIENCE: CanonicalURI;
   MCP_PRM_AUTH_SERVERS: CanonicalURI[];
   MCP_PORT: number;
+  /**
+   * Dev-only escape hatch: when `true`, the AS-metadata discovery cascade
+   * (and the JWKS fetcher it constructs) tolerate `http://` URLs. Required
+   * for the localhost demo where the IdP runs on `http://localhost:4444`.
+   * MUST be `false` in production.
+   */
+  MCP_DEV_ALLOW_INSECURE_DISCOVERY: boolean;
 }
 
 /**
@@ -80,6 +87,10 @@ const EnvSchema = z.object({
   MCP_AUDIENCE: canonicalUrlSchema("MCP_AUDIENCE"),
   MCP_PRM_AUTH_SERVERS: authServersSchema,
   MCP_PORT: z.coerce.number().int().positive().default(3333),
+  MCP_DEV_ALLOW_INSECURE_DISCOVERY: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 /**

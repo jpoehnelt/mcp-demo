@@ -42,7 +42,11 @@ export async function createMCPServerApp(deps: MCPServerDeps): Promise<MCPServer
   // 1. RFC 8414 discovery — fail-fast on boot. The shared helper runs the
   //    full cascade (`/.well-known/oauth-authorization-server` first, then
   //    OIDC fallbacks) and asserts S256 PKCE support.
-  const asMetadata = await discoverASMetadata(deps.env.MCP_OIDC_ISSUER_URL);
+  //    `MCP_DEV_ALLOW_INSECURE_DISCOVERY=true` opts in to http:// discovery
+  //    URLs for the localhost demo; production MUST stay false.
+  const asMetadata = await discoverASMetadata(deps.env.MCP_OIDC_ISSUER_URL, {
+    allowInsecure: deps.env.MCP_DEV_ALLOW_INSECURE_DISCOVERY,
+  });
 
   // 2. JWT verifier bound to (issuer, audience, jwks_uri). The verifier
   //    holds a jose remote JWKS set internally — constructed once, reused
