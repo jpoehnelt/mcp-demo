@@ -24,5 +24,8 @@
   "dependencies": {
     "jose": "catalog:",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.0"
   }
 }
