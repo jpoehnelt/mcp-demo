@@ -20,6 +20,12 @@ export {
   SSRFBlockedError,
   TokenExpiredError,
 } from "./errors.js";
+export { isDeniedAddress, type SafeFetchOptions, safeFetch } from "./http/ssrf.js";
+export {
+  buildInsufficientScopeHeader,
+  buildUnauthorizedHeader,
+  parseWWWAuthenticate,
+} from "./http/www-authenticate.js";
 export { canonicalize, equalsCanonical } from "./oauth/canonical-uri.js";
 export { generatePKCE, verifyPKCE } from "./oauth/pkce.js";
 export { generateState, verifyState } from "./oauth/state.js";
