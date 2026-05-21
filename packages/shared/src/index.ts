@@ -21,6 +21,8 @@ export {
   TokenExpiredError,
 } from "./errors.js";
 export { canonicalize, equalsCanonical } from "./oauth/canonical-uri.js";
+export type { ASMetadata } from "./types/as-metadata.js";
+export { ASMetadataSchema, parseASMetadata } from "./types/as-metadata.js";
 export type {
   AccessTokenJWT,
   AuthorizationCode,
@@ -33,3 +35,9 @@ export type {
   ScopeString,
   StateParam,
 } from "./types/brands.js";
+export type { CIMDDocument } from "./types/cimd.js";
+export { CIMDDocumentSchema, parseCIMDDocument } from "./types/cimd.js";
+export type { ProtectedResourceMetadata } from "./types/prm.js";
+export { PRMSchema, parsePRM } from "./types/prm.js";
+export type { TokenClaims } from "./types/token-claims.js";
+export { parseTokenClaims, TokenClaimsSchema } from "./types/token-claims.js";
