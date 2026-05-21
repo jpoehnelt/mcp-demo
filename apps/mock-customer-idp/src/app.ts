@@ -12,6 +12,7 @@ import type { IdPEnv } from "./env.js";
 import type { SigningKeyset } from "./keys.js";
 import type { Logger } from "./log.js";
 import { healthzRoute } from "./routes/healthz.js";
+import { registerMetadataRoutes } from "./routes/metadata.js";
 
 export interface IdPDeps {
   env: IdPEnv;
@@ -48,6 +49,7 @@ export function createIdPApp(deps: IdPDeps): IdPApp {
   });
 
   app.route("/", healthzRoute());
+  registerMetadataRoutes(app, { env: deps.env, keys: deps.keys });
 
   return app;
 }

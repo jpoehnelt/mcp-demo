@@ -41,6 +41,130 @@ describe("GET /healthz", () => {
   });
 });
 
+// Spec anchor: specs/authorization-server.md §3.1.
+describe("GET /.well-known/oauth-authorization-server [§3.1]", () => {
+  it("returns canonical issuer + endpoint URLs", async () => {
+    const { app } = await buildApp();
+    const res = await app.request("/.well-known/oauth-authorization-server");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toMatch(/^application\/json/);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.issuer).toBe("http://localhost:4444");
+    expect(body.authorization_endpoint).toBe("http://localhost:4444/authorize");
+    expect(body.token_endpoint).toBe("http://localhost:4444/token");
+    expect(body.jwks_uri).toBe("http://localhost:4444/jwks.json");
+    expect(body.response_types_supported).toEqual(["code"]);
+    expect(body.grant_types_supported).toEqual(["authorization_code", "refresh_token"]);
+    expect(body.code_challenge_methods_supported).toEqual(["S256"]);
+    expect(body.token_endpoint_auth_methods_supported).toEqual(["none"]);
+    expect(body.client_id_metadata_document_supported).toBe(true);
+    // §3.1 closing note: neither `openid` nor `offline_access` is advertised.
+    expect(body.scopes_supported).toEqual(["weather:read", "weather:premium"]);
+  });
+
+  it("sets Cache-Control: max-age=3600", async () => {
+    const { app } = await buildApp();
+    const res = await app.request("/.well-known/oauth-authorization-server");
+    expect(res.headers.get("Cache-Control")).toBe("max-age=3600");
+  });
+});
+
+// Spec anchor: specs/authorization-server.md §3.2.
+describe("GET /.well-known/openid-configuration [§3.2]", () => {
+  it("mirrors AS metadata and adds the OIDC fields", async () => {
+    const { app, env } = await buildApp();
+    const res = await app.request("/.well-known/openid-configuration");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toMatch(/^application\/json/);
+    const body = (await res.json()) as Record<string, unknown>;
+    // Mirror of §3.1 — spot-check the critical fields.
+    expect(body.issuer).toBe("http://localhost:4444");
+    expect(body.jwks_uri).toBe("http://localhost:4444/jwks.json");
+    expect(body.scopes_supported).toEqual(["weather:read", "weather:premium"]);
+    // OIDC-specific additions.
+    expect(body.subject_types_supported).toEqual(["public"]);
+    expect(body.id_token_signing_alg_values_supported).toEqual([env.AS_SIGNING_ALG]);
+    expect(body.userinfo_endpoint).toBe("http://localhost:4444/userinfo");
+  });
+
+  it("sets Cache-Control: max-age=3600", async () => {
+    const { app } = await buildApp();
+    const res = await app.request("/.well-known/openid-configuration");
+    expect(res.headers.get("Cache-Control")).toBe("max-age=3600");
+  });
+
+  it("id_token_signing_alg_values_supported reflects AS_SIGNING_ALG (ES256)", async () => {
+    // Boot a second app with ES256 so we exercise the dynamic-alg path.
+    // Hardcoded RS256 would pass the default-config test above; only this
+    // case catches a regression to a literal "RS256" in the handler.
+    const env = parseEnv({ AS_ISSUER_URL: "http://localhost:4444", AS_SIGNING_ALG: "ES256" });
+    const db = openInMemoryDB();
+    const keys = await loadOrGenerateKey(db, env.AS_SIGNING_ALG);
+    const log = createLogger({ level: "silent" });
+    const app = createIdPApp({ env, db, log, keys });
+
+    const body = (await (await app.request("/.well-known/openid-configuration")).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(body.id_token_signing_alg_values_supported).toEqual(["ES256"]);
+  });
+});
+
+// Spec anchor: specs/authorization-server.md §3.3 + §6.
+describe("GET /jwks.json [§3.3]", () => {
+  it("returns the active key with matching kid, use, and alg", async () => {
+    const { app, env, keys } = await buildApp();
+    const res = await app.request("/jwks.json");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toMatch(/^application\/json/);
+    const body = (await res.json()) as { keys: Array<Record<string, unknown>> };
+    expect(body.keys).toHaveLength(1);
+    const jwk = body.keys[0];
+    if (jwk === undefined) {
+      throw new Error("Expected jwks.keys[0] to be defined");
+    }
+    expect(jwk.kid).toBe(keys.kid);
+    expect(jwk.use).toBe("sig");
+    expect(jwk.alg).toBe(env.AS_SIGNING_ALG);
+    // Public-only — the private key components (`d`, `p`, `q`, `dp`, `dq`,
+    // `qi` for RSA; `d` for EC/OKP) MUST never appear in JWKS responses.
+    expect(jwk.d).toBeUndefined();
+    expect(jwk.p).toBeUndefined();
+    expect(jwk.q).toBeUndefined();
+  });
+
+  it("sets Cache-Control: max-age=3600", async () => {
+    const { app } = await buildApp();
+    const res = await app.request("/jwks.json");
+    expect(res.headers.get("Cache-Control")).toBe("max-age=3600");
+  });
+
+  it("returns alg=ES256 when AS_SIGNING_ALG=ES256", async () => {
+    const env = parseEnv({ AS_ISSUER_URL: "http://localhost:4444", AS_SIGNING_ALG: "ES256" });
+    const db = openInMemoryDB();
+    const keys = await loadOrGenerateKey(db, env.AS_SIGNING_ALG);
+    const log = createLogger({ level: "silent" });
+    const app = createIdPApp({ env, db, log, keys });
+
+    const body = (await (await app.request("/jwks.json")).json()) as {
+      keys: Array<Record<string, unknown>>;
+    };
+    expect(body.keys[0]?.alg).toBe("ES256");
+    expect(body.keys[0]?.kid).toBe(keys.kid);
+  });
+});
+
+describe("GET /userinfo (stub for §3.2 advertisement)", () => {
+  it("returns 200 with an empty object", async () => {
+    const { app } = await buildApp();
+    const res = await app.request("/userinfo");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toEqual({});
+  });
+});
+
 describe("parseEnv", () => {
   it("throws ZodError when AS_ISSUER_URL is missing", () => {
     expect(() => parseEnv({})).toThrow(ZodError);
