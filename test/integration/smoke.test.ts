@@ -133,7 +133,11 @@ describe.skipIf(SKIP_SMOKE)("subprocess smoke test", () => {
       ],
       { cwd: REPO_ROOT, stdio: ["ignore", "pipe", "pipe"] },
     );
-    const { stdout, exitCode } = await collectOutput(client);
+    const { stdout, stderr, exitCode } = await collectOutput(client);
+    if (exitCode !== 0) {
+      console.error("STDOUT:", stdout);
+      console.error("STDERR:", stderr);
+    }
     expect(exitCode).toBe(0);
     // The tool returns `{"city":"Denver","tempF":72,"conditions":"sunny"}`.
     expect(stdout).toContain("Denver");
