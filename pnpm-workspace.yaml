@@ -8,7 +8,7 @@ packages:
 catalog:
   "@hono/node-server": ^2.0.3
   "@modelcontextprotocol/sdk": ^1.29.0
-  hono: ^4.12.21
+  hono: ^4.12.25
   jose: ^6.0.0
   pino: ^10.0.0
   tsx: ^4.19.0
