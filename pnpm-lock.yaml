@@ -13,8 +13,8 @@ catalogs:
       specifier: ^1.29.0
       version: 1.29.0
     hono:
-      specifier: ^4.12.21
-      version: 4.12.21
+      specifier: ^4.12.27
+      version: 4.12.31
     jose:
       specifier: ^6.0.0
       version: 6.2.3
@@ -37,13 +37,13 @@ importers:
         version: 2.4.15
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.3(hono@4.12.21)
+        version: 2.0.3(hono@4.12.31)
       '@types/node':
         specifier: ^25.9.0
         version: 25.9.1
       hono:
         specifier: 'catalog:'
-        version: 4.12.21
+        version: 4.12.31
       lefthook:
         specifier: ^2.1.0
         version: 2.1.8
@@ -58,7 +58,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.3(hono@4.12.21)
+        version: 2.0.3(hono@4.12.31)
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.29.0(zod@4.4.3)
@@ -70,7 +70,7 @@ importers:
         version: 14.0.3
       hono:
         specifier: 'catalog:'
-        version: 4.12.21
+        version: 4.12.31
       open:
         specifier: ^11.0.0
         version: 11.0.0
@@ -89,7 +89,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.3(hono@4.12.21)
+        version: 2.0.3(hono@4.12.31)
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.29.0(zod@4.4.3)
@@ -98,7 +98,7 @@ importers:
         version: link:../../packages/shared
       hono:
         specifier: 'catalog:'
-        version: 4.12.21
+        version: 4.12.31
       jose:
         specifier: 'catalog:'
         version: 6.2.3
@@ -117,7 +117,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.3(hono@4.12.21)
+        version: 2.0.3(hono@4.12.31)
       '@poc/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -126,7 +126,7 @@ importers:
         version: 12.10.0
       hono:
         specifier: 'catalog:'
-        version: 4.12.21
+        version: 4.12.31
       jose:
         specifier: 'catalog:'
         version: 6.2.3
@@ -841,8 +841,8 @@ packages:
     resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
 
-  hono@4.12.21:
-    resolution: {integrity: sha512-uV63apnb0kyPtAUwoWgaGh9HyIFcv8lgmzPZSiTBQAFOFGIzka5EZ1dZocmGnn0XdX0+XTqJ6Tqv7selMuGLRQ==}
+  hono@4.12.31:
+    resolution: {integrity: sha512-zJIHFrl6bq3RDd2YusFNCDlM8qUprxKswyi/OPzPyzKDdyBXDqWx8bZlZ7R+saTdSTatUmb3O7K4SspGPaEOQg==}
     engines: {node: '>=16.9.0'}
 
   http-errors@2.0.1:
@@ -1606,19 +1606,19 @@ snapshots:
   '@esbuild/win32-x64@0.28.0':
     optional: true
 
-  '@hono/node-server@1.19.14(hono@4.12.21)':
+  '@hono/node-server@1.19.14(hono@4.12.31)':
     dependencies:
-      hono: 4.12.21
+      hono: 4.12.31
 
-  '@hono/node-server@2.0.3(hono@4.12.21)':
+  '@hono/node-server@2.0.3(hono@4.12.31)':
     dependencies:
-      hono: 4.12.21
+      hono: 4.12.31
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 1.19.14(hono@4.12.21)
+      '@hono/node-server': 1.19.14(hono@4.12.31)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -1628,7 +1628,7 @@ snapshots:
       eventsource-parser: 3.0.8
       express: 5.2.1
       express-rate-limit: 8.5.2(express@5.2.1)
-      hono: 4.12.21
+      hono: 4.12.31
       jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -2058,7 +2058,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.12.21: {}
+  hono@4.12.31: {}
 
   http-errors@2.0.1:
     dependencies:
