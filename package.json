@@ -33,7 +33,7 @@
     "hono": "catalog:",
     "lefthook": "^2.1.0",
     "typescript": "^6.0.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.1.11"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
